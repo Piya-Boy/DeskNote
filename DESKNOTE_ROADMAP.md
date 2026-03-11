@@ -13,7 +13,7 @@ Tech Stack:
 
 ---
 
-# Phase 1 — Background Application
+# Phase 1 — Background Application ✅ (Completed)
 
 ### Goal
 Run DeskNote in the background instead of opening a main window.
@@ -28,7 +28,7 @@ DeskNote runs automatically and stays in the system tray.
 
 ---
 
-# Phase 2 — System Tray Controls
+# Phase 2 — System Tray Controls ✅ (Completed)
 
 ### Goal
 Control DeskNote from the system tray.
