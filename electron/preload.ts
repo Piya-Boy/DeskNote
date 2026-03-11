@@ -13,13 +13,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startDrag: () => {
     ipcRenderer.send('note-start-drag')
   },
-  resizeTo: (width: number, height: number) => {
-    ipcRenderer.send('note-resize-to', { width, height })
+  bringToFront: () => {
+    ipcRenderer.send('note-bring-to-front')
   },
-  startResize: (startW: number, startH: number) => {
-    ipcRenderer.send('note-start-resize', { startW, startH })
+  resizeStart: (startW: number, startH: number) => {
+    ipcRenderer.send('note-resize-start', { startW, startH })
   },
-  stopResize: () => {
-    ipcRenderer.send('note-stop-resize')
+  resizeStop: () => {
+    ipcRenderer.send('note-resize-stop')
+  },
+  collapse: () => {
+    ipcRenderer.send('note-collapse')
+  },
+  expand: () => {
+    ipcRenderer.send('note-expand')
   },
 })
