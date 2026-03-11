@@ -1,29 +1,17 @@
-import { FloatingToolbar } from "@/components/FloatingToolbar";
-import { NotesLayer } from "@/components/NotesLayer";
-import { useNotes } from "@/hooks/useNotes";
 import { useEffect } from "react";
 
 const Index = () => {
-  const { notes, order, addNote, updateNote, deleteNote, bringToFront } = useNotes();
-
-  useEffect(() => {
-    if (window.electronAPI) {
-      window.electronAPI.onNewNote(() => {
-        addNote();
-      });
-    }
-  }, [addNote]);
-
   return (
-    <div className="min-h-screen bg-transparent">
-      <NotesLayer
-        notes={notes}
-        order={order}
-        onUpdate={updateNote}
-        onDelete={deleteNote}
-        onBringToFront={bringToFront}
-      />
-      <FloatingToolbar onNewNote={addNote} />
+    <div className="min-h-screen bg-transparent flex items-center justify-center p-8">
+      <div className="text-center space-y-4 max-w-md animate-pop-in">
+        <h1 className="text-2xl font-bold text-foreground/80">DeskNote is running</h1>
+        <p className="text-muted-foreground">
+          Use <kbd className="px-2 py-1 bg-muted rounded border text-xs font-sans">Ctrl + Shift + N</kbd> to create a new sticky note.
+        </p>
+        <p className="text-sm text-muted-foreground/60 italic">
+          You can also manage notes from the system tray.
+        </p>
+      </div>
     </div>
   );
 };

@@ -60,7 +60,7 @@ Users can create a sticky note anywhere instantly.
 
 ---
 
-# Phase 4 — Independent Note Windows
+# Phase 4 — Independent Note Windows ✅ (Completed)
 
 ### Goal
 Each note should behave like its own desktop widget.
