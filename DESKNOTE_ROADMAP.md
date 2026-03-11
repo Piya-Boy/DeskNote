@@ -45,7 +45,7 @@ Users can create new notes from the tray menu.
 
 ---
 
-# Phase 3 — Global Shortcut
+# Phase 3 — Global Shortcut ✅ (Completed)
 
 ### Goal
 Allow users to create notes instantly using keyboard shortcuts.

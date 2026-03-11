@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from "electron";
+import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,14 +84,27 @@ function createTray() {
   });
 }
 
+// ── Global Shortcut ────────────────────────────────────────
+function registerShortcuts() {
+  globalShortcut.register("CommandOrControl+Shift+N", () => {
+    mainWindow?.show();
+    mainWindow?.webContents.send("new-note");
+  });
+}
+
 // ── App lifecycle ──────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();
   createTray();
+  registerShortcuts();
 });
 
 app.on("window-all-closed", () => {
   // Keep running in tray
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 // Extension to avoid closing
