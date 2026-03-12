@@ -15,7 +15,7 @@ const Footer = () => {
 
         <div className="flex items-center gap-6">
           <a
-            href="https://github.com/Piya-Boy/DeskNote"
+            href="https://github.com/Piya-Boy/DeskNote/tree/main/App"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors font-body"

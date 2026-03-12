@@ -116,7 +116,7 @@ const Hero = () => {
             className="border-border text-foreground hover:bg-secondary rounded-xl px-8 py-6 text-base font-display"
             asChild
           >
-            <a href="https://github.com/Piya-Boy/DeskNote" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/Piya-Boy/DeskNote/tree/main/App" target="_blank" rel="noopener noreferrer">
               <Github className="mr-2 h-5 w-5" />
               GitHub
             </a>
