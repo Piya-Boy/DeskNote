@@ -1,464 +1,262 @@
-import { app, Tray, Menu, nativeImage, globalShortcut, BrowserWindow, ipcMain, screen, clipboard, dialog } from 'electron'
-import path from 'path'
-import fs from 'fs'
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  nativeImage,
+  globalShortcut,
+  ipcMain,
+  screen,
+} from "electron";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import fs from "node:fs";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-let tray: Tray | null = null
+// ── Paths ──────────────────────────────────────────────────
+const DIST_ELECTRON = __dirname;
+const DIST_RENDERER = path.join(DIST_ELECTRON, "../dist");
+const PUBLIC = app.isPackaged
+  ? DIST_RENDERER
+  : path.join(DIST_ELECTRON, "../public");
 
-const DEV_URL = 'http://localhost:8080'
-const isDev = !app.isPackaged
+const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
-// note windows map: windowId → BrowserWindow
-const noteWindows = new Map<number, BrowserWindow>()
-// noteId → windowId (for looking up window from note id)
-const noteIdToWinId = new Map<string, number>()
-
-// ป้องกันการเปิด instance ซ้ำ
-const gotLock = app.requestSingleInstanceLock()
-if (!gotLock) {
-  app.quit()
+// ── Note type (mirrored from renderer) ─────────────────────
+interface Note {
+  id: string;
+  text: string;
+  color: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  pinned: boolean;
 }
 
-// ------------------- Persistence -------------------
+const COLORS = ["yellow", "blue", "green", "pink", "purple"];
 
-interface NoteRecord {
-  id: string
-  text: string
-  color: string
-  pinned: boolean
-  collapsed: boolean
-  x: number
-  y: number
-  width: number
-  height: number
-  /** ความสูงเมื่อขยาย (ไม่เขียนทับด้วย 48) */
-  expandedHeight?: number
-  createdAt: string
-  updatedAt: string
-}
+// ── Data storage ───────────────────────────────────────────
+const DATA_PATH = path.join(app.getPath("userData"), "notes.json");
+const noteWindows = new Map<string, BrowserWindow>();
+let notes: Note[] = [];
 
-function getDbPath() {
-  return path.join(app.getPath('userData'), 'notes.json')
-}
-
-function loadNotes(): NoteRecord[] {
+function loadNotes(): Note[] {
   try {
-    const raw = fs.readFileSync(getDbPath(), 'utf-8')
-    return JSON.parse(raw)
+    if (fs.existsSync(DATA_PATH)) {
+      return JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
+    }
   } catch {
-    return []
+    // ignore
   }
+  return [];
 }
 
-function saveNotes(notes: NoteRecord[]) {
-  fs.writeFileSync(getDbPath(), JSON.stringify(notes, null, 2), 'utf-8')
+function saveNotes() {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(notes, null, 2));
 }
 
-function getNoteById(id: string): NoteRecord | undefined {
-  return loadNotes().find(n => n.id === id)
+function createNoteData(): Note {
+  const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
+  return {
+    id: crypto.randomUUID(),
+    text: "",
+    color: COLORS[notes.length % COLORS.length],
+    x: Math.round(screenW / 2 - 110 + Math.random() * 80 - 40),
+    y: Math.round(screenH / 2 - 110 + Math.random() * 80 - 40),
+    width: 260,
+    height: 280,
+    pinned: false,
+  };
 }
 
-function upsertNote(data: Partial<NoteRecord> & { id: string }) {
-  const notes = loadNotes()
-  const idx = notes.findIndex(n => n.id === data.id)
-  const now = new Date().toISOString()
-  if (idx >= 0) {
-    notes[idx] = { ...notes[idx], ...data, updatedAt: now }
-  } else {
-    notes.push({
-      id: data.id,
-      text: data.text ?? '',
-      color: data.color ?? 'yellow',
-      pinned: data.pinned ?? false,
-      collapsed: data.collapsed ?? false,
-      x: data.x ?? 100,
-      y: data.y ?? 100,
-      width: data.width ?? 320,
-      height: data.height ?? 350,
-      createdAt: now,
-      updatedAt: now,
-    })
+// ── Note window ────────────────────────────────────────────
+function createNoteWindow(note: Note) {
+  if (noteWindows.has(note.id)) {
+    const existing = noteWindows.get(note.id)!;
+    existing.show();
+    existing.focus();
+    return;
   }
-  saveNotes(notes)
-}
-
-function deleteNote(id: string) {
-  const notes = loadNotes().filter(n => n.id !== id)
-  saveNotes(notes)
-}
-
-// noteId lookup from windowId
-const winIdToNoteId = new Map<number, string>()
-// track which windows are currently collapsed (to prevent saving height=48)
-const collapsedWinIds = new Set<number>()
-// track whether notes are currently visible (for hide/show toggle)
-let notesVisible = true
-
-// ------------------- Auto-launch -------------------
-
-function getAutoLaunch(): boolean {
-  return app.getLoginItemSettings().openAtLogin
-}
-
-function setAutoLaunch(enable: boolean) {
-  if (!app.isPackaged) return // skip registry writes in dev
-  app.setLoginItemSettings({ openAtLogin: enable })
-}
-
-// ------------------- App lifecycle -------------------
-
-app.on('ready', () => {
-  if (app.dock) app.dock.hide()
-  createTray()
-  registerShortcuts()
-  setupIPC()
-  restoreNotes()
-})
-
-function registerShortcuts() {
-  globalShortcut.register('CommandOrControl+Shift+N', () => {
-    createNoteWindow()
-  })
-  globalShortcut.register('CommandOrControl+Shift+V', () => {
-    const text = clipboard.readText().trim()
-    createNoteWindow(undefined, text || undefined)
-  })
-  globalShortcut.register('CommandOrControl+Shift+H', () => {
-    toggleNotesVisibility()
-  })
-}
-
-function toggleNotesVisibility() {
-  if (notesVisible) {
-    noteWindows.forEach((win) => win.hide())
-  } else {
-    noteWindows.forEach((win) => win.show())
-  }
-  notesVisible = !notesVisible
-  // Rebuild tray menu to reflect current state
-  rebuildTrayMenu()
-}
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
-})
-
-async function deleteAllNotes() {
-  const { response } = await dialog.showMessageBox({
-    type: 'warning',
-    buttons: ['Cancel', 'Clear'],
-    defaultId: 1,
-    cancelId: 0,
-    title: 'Clear all notes',
-    message: 'Are you sure you want to clear all notes?',
-  })
-
-  if (response !== 1) return
-
-  const notes = loadNotes()
-  for (const note of notes) {
-    deleteNote(note.id)
-  }
-  saveNotes([])
-  noteWindows.forEach((win) => win.close())
-  noteIdToWinId.clear()
-  winIdToNoteId.clear()
-  collapsedWinIds.clear()
-  notesVisible = true
-  rebuildTrayMenu()
-}
-app.on('window-all-closed', () => {
-  // Intentionally empty — keeps app alive when all notes are closed
-})
-
-// ------------------- Note Window -------------------
-
-const noteColors = ['yellow', 'blue', 'green', 'pink', 'purple'] as const
-let colorIndex = 0
-
-function createNoteWindow(savedNote?: NoteRecord, initialText?: string) {
-  let winX: number, winY: number
-
-  if (savedNote) {
-    winX = savedNote.x
-    winY = savedNote.y
-  } else {
-    const { x: cursorX, y: cursorY } = screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint({ x: cursorX, y: cursorY })
-    winX = Math.min(cursorX, display.workArea.x + display.workArea.width - 320)
-    winY = Math.min(cursorY, display.workArea.y + display.workArea.height - 350)
-  }
-
-  const preloadPath = path.join(__dirname, 'preload.cjs')
-
-  const isCollapsed = savedNote?.collapsed ?? false
-  const winWidth = savedNote?.width ?? 320
-  const expandedH = savedNote?.expandedHeight ?? savedNote?.height ?? 330
-  const winHeight = isCollapsed ? 48 : expandedH
 
   const win = new BrowserWindow({
-    x: winX,
-    y: winY,
-    width: winWidth,
-    height: winHeight,
-    minWidth: 168,
-    minHeight: isCollapsed ? 40 : 168,
+    width: note.width,
+    height: note.height,
+    x: note.x,
+    y: note.y,
     frame: false,
     transparent: true,
-    alwaysOnTop: false,
+    alwaysOnTop: note.pinned,
     resizable: true,
     skipTaskbar: true,
     hasShadow: false,
+    icon: path.join(PUBLIC, "img/icon/logo.png"),
+    minWidth: 160,
+    minHeight: 160,
     webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.mjs"),
     },
-  })
+  });
 
-  let noteId: string
-  let noteData: NoteRecord
-
-  if (savedNote) {
-    noteId = savedNote.id
-    noteData = savedNote
+  // Load note page
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(`${VITE_DEV_SERVER_URL}/note.html?noteId=${note.id}`);
   } else {
-    noteId = `${Date.now()}`
-    const color = noteColors[colorIndex % noteColors.length]
-    colorIndex++
-    const [x, y] = win.getPosition()
-    noteData = {
-      id: noteId,
-      text: initialText ?? '',
-      color,
-      pinned: false,
-      collapsed: false,
-      x,
-      y,
-      width: 320,
-      height: 350,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    upsertNote(noteData)
+    win.loadFile(path.join(DIST_RENDERER, "note.html"), {
+      search: `noteId=${note.id}`,
+    });
   }
-
-  if (isCollapsed) collapsedWinIds.add(win.id)
-
-  winIdToNoteId.set(win.id, noteId)
-  noteIdToWinId.set(noteId, win.id)
-
-  if (isDev) {
-    win.loadURL(`${DEV_URL}/note.html`)
-  } else {
-    win.loadFile(path.join(__dirname, '../dist/note.html'))
-  }
-
-  const sendNoteData = () => {
-    const id = winIdToNoteId.get(win.id)
-    const data = id ? getNoteById(id) : undefined
-    if (data) win.webContents.send('note-data', data)
-  }
-
-  win.webContents.on('did-finish-load', () => {
-    sendNoteData()
-  })
-
-  win.on('show', () => {
-    sendNoteData()
-  })
 
   // Save position on move
-  win.on('moved', () => {
-    const [x, y] = win.getPosition()
-    const id = winIdToNoteId.get(win.id)
-    if (id) upsertNote({ id, x, y })
-  })
+  win.on("moved", () => {
+    const [x, y] = win.getPosition();
+    const n = notes.find((n) => n.id === note.id);
+    if (n) {
+      n.x = x;
+      n.y = y;
+      saveNotes();
+    }
+  });
 
-  noteWindows.set(win.id, win)
-  win.on('closed', () => {
-    const id = winIdToNoteId.get(win.id)
-    if (id) noteIdToWinId.delete(id)
-    winIdToNoteId.delete(win.id)
-    collapsedWinIds.delete(win.id)
-    noteWindows.delete(win.id)
-  })
+  // Save size on resize
+  win.on("resized", () => {
+    const [width, height] = win.getSize();
+    const n = notes.find((n) => n.id === note.id);
+    if (n) {
+      n.width = width;
+      n.height = height;
+      saveNotes();
+    }
+  });
 
-  return win
+  win.on("closed", () => {
+    noteWindows.delete(note.id);
+  });
+
+  noteWindows.set(note.id, win);
 }
 
-function restoreNotes() {
-  const notes = loadNotes()
-  for (const note of notes) {
-    createNoteWindow(note)
-  }
-  // seed color index after restore
-  colorIndex = notes.length
-}
-
-// ------------------- IPC -------------------
-
-function setupIPC() {
-  ipcMain.on('note-update', (event, updates: Partial<NoteRecord>) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win) return
-    const id = winIdToNoteId.get(win.id)
-    if (id) upsertNote({ id, ...updates })
-  })
-
-  ipcMain.on('note-delete', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win) return
-    const id = winIdToNoteId.get(win.id)
-    if (id) deleteNote(id)
-    win.close()
-  })
-
-  ipcMain.on('note-bring-to-front', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    win?.moveTop()
-  })
-
-  ipcMain.on('note-collapse', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (win) {
-      const [x, y] = win.getPosition()
-      const [w, h] = win.getSize()
-      const id = winIdToNoteId.get(win.id)
-      const saved = id ? getNoteById(id) : undefined
-      const heightToSave = h > 48 ? h : (saved?.expandedHeight ?? saved?.height ?? 330)
-      if (id) upsertNote({ id, height: heightToSave, expandedHeight: heightToSave, collapsed: true })
-      collapsedWinIds.add(win.id)
-      win.setMinimumSize(160, 40)
-      win.setBounds({ x, y, width: w, height: 48 })
-      const updated = id ? getNoteById(id) : undefined
-      if (updated) win.webContents.send('note-data', updated)
-    }
-  })
-
-  ipcMain.on('note-expand', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (win) {
-      const [x, y] = win.getPosition()
-      const [w] = win.getSize()
-      const id = winIdToNoteId.get(win.id)
-      const saved = id ? getNoteById(id) : undefined
-      const h = saved?.expandedHeight ?? saved?.height ?? 350
-      collapsedWinIds.delete(win.id)
-      if (id) upsertNote({ id, collapsed: false, height: h, expandedHeight: h })
-      win.setMinimumSize(168, 168)
-      win.setBounds({ x, y, width: w, height: h })
-      const updated = id ? getNoteById(id) : undefined
-      if (updated) win.webContents.send('note-data', updated)
-    }
-  })
-
-  ipcMain.on('note-start-drag', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (win) win.webContents.startDrag({ file: '', icon: nativeImage.createEmpty() })
-  })
-
-  ipcMain.on('note-resize-start', (event, { startW, startH }) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win) return
-    const startCursor = screen.getCursorScreenPoint()
-
-    const interval = setInterval(() => {
-      const cur = screen.getCursorScreenPoint()
-      const newW = Math.max(168, startW + cur.x - startCursor.x)
-      const newH = Math.max(168, startH + cur.y - startCursor.y)
-      const [x, y] = win.getPosition()
-      win.setBounds({ x, y, width: newW, height: newH })
-    }, 16)
-
-    const stopHandler = (e: Electron.IpcMainEvent) => {
-      if (BrowserWindow.fromWebContents(e.sender)?.id === win.id) {
-        clearInterval(interval)
-        ipcMain.removeListener('note-resize-stop', stopHandler)
-        // Save size after resize (but never save collapsed height)
-        if (!collapsedWinIds.has(win.id)) {
-          const [x, y] = win.getPosition()
-          const [w, h] = win.getSize()
-          const id = winIdToNoteId.get(win.id)
-          if (id) upsertNote({ id, x, y, width: w, height: h, expandedHeight: h })
-        }
-      }
-    }
-    ipcMain.on('note-resize-stop', stopHandler)
-  })
-}
-
-// ------------------- Tray -------------------
+// ── Tray ───────────────────────────────────────────────────
+let tray: Tray | null = null;
 
 function createTray() {
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'img/icon/logo.png')
-    : path.join(__dirname, '../public/img/icon/logo.png')
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+  const iconPath = path.join(PUBLIC, "img/icon/logo.png");
+  const icon = nativeImage
+    .createFromPath(iconPath)
+    .resize({ width: 16, height: 16 });
 
-  tray = new Tray(icon)
-  tray.setToolTip('DeskNote')
+  tray = new Tray(icon);
+  tray.setToolTip("DeskNote");
 
-  tray.setContextMenu(buildTrayMenu())
-  tray.on('click', () => tray?.popUpContextMenu())
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "New Note",
+      click: () => {
+        const note = createNoteData();
+        notes.push(note);
+        saveNotes();
+        createNoteWindow(note);
+      },
+    },
+    {
+      label: "Show All Notes",
+      click: () => {
+        for (const note of notes) {
+          createNoteWindow(note);
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  tray.on("double-click", () => {
+    for (const note of notes) {
+      createNoteWindow(note);
+    }
+  });
 }
 
-function rebuildTrayMenu() {
-  tray?.setContextMenu(buildTrayMenu())
+// ── Global Shortcut ────────────────────────────────────────
+function registerShortcuts() {
+  globalShortcut.register("CommandOrControl+Shift+N", () => {
+    const note = createNoteData();
+    notes.push(note);
+    saveNotes();
+    createNoteWindow(note);
+  });
 }
 
-function buildTrayMenu() {
-  return Menu.buildFromTemplate([
-    {
-      label: 'New Note',
-      accelerator: 'CommandOrControl+Shift+N',
-      click: () => createNoteWindow(),
-    },
-    {
-      label: 'New Note from Clipboard',
-      accelerator: 'CommandOrControl+Shift+V',
-      click: () => {
-        const text = clipboard.readText().trim()
-        createNoteWindow(undefined, text || undefined)
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Show All Notes',
-      click: () => {
-        noteWindows.forEach((win) => win.show())
-        notesVisible = true
-        rebuildTrayMenu()
-      },
-    },
-    {
-      label: 'Hide All Notes',
-      click: () => {
-        noteWindows.forEach((win) => win.hide())
-        notesVisible = false
-        rebuildTrayMenu()
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Launch at Startup',
-      type: 'checkbox',
-      checked: getAutoLaunch(),
-      click: (menuItem) => {
-        setAutoLaunch(menuItem.checked)
-        rebuildTrayMenu()
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Clear All Notes',
-      click: () => {
-        deleteAllNotes()
-      },
-    },
-    {
-      label: 'Quit',
-      click: () => app.exit(0),
-    },
-  ])
+// ── IPC handlers ───────────────────────────────────────────
+function setupIPC() {
+  ipcMain.handle("get-note", (_event, id: string) => {
+    return notes.find((n) => n.id === id) || null;
+  });
+
+  ipcMain.handle(
+    "update-note",
+    (_event, id: string, updates: Partial<Note>) => {
+      const note = notes.find((n) => n.id === id);
+      if (!note) return;
+
+      Object.assign(note, updates);
+      saveNotes();
+
+      // Sync alwaysOnTop with pinned state
+      if ("pinned" in updates) {
+        const win = noteWindows.get(id);
+        if (win) win.setAlwaysOnTop(!!updates.pinned);
+      }
+    }
+  );
+
+  ipcMain.handle("delete-note", (_event, id: string) => {
+    notes = notes.filter((n) => n.id !== id);
+    saveNotes();
+    const win = noteWindows.get(id);
+    if (win) {
+      win.destroy();
+      noteWindows.delete(id);
+    }
+  });
+}
+
+// ── App lifecycle ──────────────────────────────────────────
+app.whenReady().then(() => {
+  notes = loadNotes();
+  setupIPC();
+  createTray();
+  registerShortcuts();
+
+  // Open all saved notes on start
+  for (const note of notes) {
+    createNoteWindow(note);
+  }
+});
+
+app.on("window-all-closed", () => {
+  // Keep running in tray
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
+
+// Extension to allow isQuitting
+declare global {
+  namespace Electron {
+    interface App {
+      isQuitting?: boolean;
+    }
+  }
 }

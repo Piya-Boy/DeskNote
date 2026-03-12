@@ -1,31 +1,12 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld('electronAPI', {
-  onNoteData: (cb: (data: unknown) => void) => {
-    ipcRenderer.on('note-data', (_event, data) => cb(data))
-  },
-  updateNote: (updates: unknown) => {
-    ipcRenderer.send('note-update', updates)
-  },
-  deleteNote: () => {
-    ipcRenderer.send('note-delete')
-  },
-  startDrag: () => {
-    ipcRenderer.send('note-start-drag')
-  },
-  bringToFront: () => {
-    ipcRenderer.send('note-bring-to-front')
-  },
-  resizeStart: (startW: number, startH: number) => {
-    ipcRenderer.send('note-resize-start', { startW, startH })
-  },
-  resizeStop: () => {
-    ipcRenderer.send('note-resize-stop')
-  },
-  collapse: () => {
-    ipcRenderer.send('note-collapse')
-  },
-  expand: () => {
-    ipcRenderer.send('note-expand')
-  },
-})
+contextBridge.exposeInMainWorld("electronAPI", {
+  // Note CRUD
+  getNote: (id: string) => ipcRenderer.invoke("get-note", id),
+  updateNote: (id: string, updates: Record<string, unknown>) =>
+    ipcRenderer.invoke("update-note", id, updates),
+  deleteNote: (id: string) => ipcRenderer.invoke("delete-note", id),
+
+  // Events from main
+  onNewNote: (callback: () => void) => ipcRenderer.on("new-note", callback),
+});
