@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Download, FileText, Calendar, HardDrive } from "lucide-react";
+import { Download, FileText, Calendar, HardDrive, Apple } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const DownloadSection = () => {
@@ -51,6 +51,11 @@ const DownloadSection = () => {
               <Calendar className="h-4 w-4" />
               <span>· March 2026</span>
             </div>
+          </div>
+
+          <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground/60 font-body">
+            <Apple className="h-4 w-4" />
+            <span>macOS version coming soon</span>
           </div>
         </motion.div>
       </div>
