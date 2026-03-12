@@ -122,6 +122,15 @@ const Hero = () => {
             </a>
           </Button>
         </motion.div>
+
+        <motion.p
+          className="mt-6 text-sm text-muted-foreground/50 font-body"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.7 }}
+        >
+          Windows · macOS coming soon
+        </motion.p>
       </div>
     </section>
   );
