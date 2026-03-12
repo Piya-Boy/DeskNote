@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Pin, Palette, Trash2, Minus } from 'lucide-react'
 import { ColorPicker } from './ColorPicker'
 import { NoteColor } from '@/types/note'
@@ -50,7 +50,7 @@ export function NoteApp() {
   useEffect(() => {
     window.electronAPI?.onNoteData((data) => {
       setNote(data)
-      if (data.collapsed) setCollapsed(true)
+      setCollapsed(!!data.collapsed)
     })
   }, [])
 
@@ -135,9 +135,11 @@ export function NoteApp() {
                 if (collapsed) {
                   window.electronAPI?.expand()
                   setCollapsed(false)
+                  update({ collapsed: false })
                 } else {
                   window.electronAPI?.collapse()
                   setCollapsed(true)
+                  update({ collapsed: true })
                   setShowColors(false)
                   setConfirmDelete(false)
                 }
@@ -186,28 +188,17 @@ export function NoteApp() {
         )}
 
         {/* Textarea */}
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.div
-              key="note-body"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="overflow-hidden flex-1"
-            >
-              <div className="px-3 pb-3 h-full">
-                <textarea
-                  ref={textareaRef}
-                  value={note.text}
-                  onChange={(e) => update({ text: e.target.value })}
-                  placeholder="Type something..."
-                  className="w-full h-full bg-transparent resize-none outline-none text-sm leading-relaxed text-foreground placeholder:text-foreground/30 font-sans cursor-text overflow-auto scrollbar-none"
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {!collapsed && (
+          <div className="px-3 pb-3 flex-1 overflow-hidden">
+            <textarea
+              ref={textareaRef}
+              value={note.text}
+              onChange={(e) => update({ text: e.target.value })}
+              placeholder="Type something..."
+              className="w-full h-full bg-transparent resize-none outline-none text-sm leading-relaxed text-foreground placeholder:text-foreground/30 font-sans cursor-text overflow-auto scrollbar-none"
+            />
+          </div>
+        )}
       </div>
 
       {/* Resize handle */}
@@ -217,12 +208,12 @@ export function NoteApp() {
           onPointerDown={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            // setPointerCapture ทำให้ element รับ pointermove/pointerup แม้ cursor ออกนอก window
-            ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+              // setPointerCapture ทำให้ element รับ pointermove/pointerup แม้ cursor ออกนอก window
+              ; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
             window.electronAPI?.resizeStart(window.innerWidth, window.innerHeight)
           }}
           onPointerUp={(e) => {
-            ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+            ; (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
             window.electronAPI?.resizeStop()
           }}
         >

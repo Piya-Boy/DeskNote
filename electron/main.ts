@@ -1,4 +1,4 @@
-import { app, Tray, Menu, nativeImage, globalShortcut, BrowserWindow, ipcMain, screen, clipboard } from 'electron'
+import { app, Tray, Menu, nativeImage, globalShortcut, BrowserWindow, ipcMain, screen, clipboard, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
@@ -31,6 +31,8 @@ interface NoteRecord {
   y: number
   width: number
   height: number
+  /** ความสูงเมื่อขยาย (ไม่เขียนทับด้วย 48) */
+  expandedHeight?: number
   createdAt: string
   updatedAt: string
 }
@@ -141,6 +143,30 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
 })
 
+async function deleteAllNotes() {
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Cancel', 'Clear'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Clear all notes',
+    message: 'Are you sure you want to clear all notes?',
+  })
+
+  if (response !== 1) return
+
+  const notes = loadNotes()
+  for (const note of notes) {
+    deleteNote(note.id)
+  }
+  saveNotes([])
+  noteWindows.forEach((win) => win.close())
+  noteIdToWinId.clear()
+  winIdToNoteId.clear()
+  collapsedWinIds.clear()
+  notesVisible = true
+  rebuildTrayMenu()
+}
 app.on('window-all-closed', () => {
   // Intentionally empty — keeps app alive when all notes are closed
 })
@@ -167,7 +193,8 @@ function createNoteWindow(savedNote?: NoteRecord, initialText?: string) {
 
   const isCollapsed = savedNote?.collapsed ?? false
   const winWidth = savedNote?.width ?? 320
-  const winHeight = isCollapsed ? 48 : (savedNote?.height ?? 350)
+  const expandedH = savedNote?.expandedHeight ?? savedNote?.height ?? 330
+  const winHeight = isCollapsed ? 48 : expandedH
 
   const win = new BrowserWindow({
     x: winX,
@@ -227,10 +254,19 @@ function createNoteWindow(savedNote?: NoteRecord, initialText?: string) {
     win.loadFile(path.join(__dirname, '../dist/note.html'))
   }
 
+  const sendNoteData = () => {
+    const id = winIdToNoteId.get(win.id)
+    const data = id ? getNoteById(id) : undefined
+    if (data) win.webContents.send('note-data', data)
+  }
+
   win.webContents.on('did-finish-load', () => {
-    win.webContents.send('note-data', noteData)
+    sendNoteData()
   })
 
+  win.on('show', () => {
+    sendNoteData()
+  })
 
   // Save position on move
   win.on('moved', () => {
@@ -289,10 +325,14 @@ function setupIPC() {
       const [x, y] = win.getPosition()
       const [w, h] = win.getSize()
       const id = winIdToNoteId.get(win.id)
-      if (id) upsertNote({ id, height: h, collapsed: true })
+      const saved = id ? getNoteById(id) : undefined
+      const heightToSave = h > 48 ? h : (saved?.expandedHeight ?? saved?.height ?? 330)
+      if (id) upsertNote({ id, height: heightToSave, expandedHeight: heightToSave, collapsed: true })
       collapsedWinIds.add(win.id)
       win.setMinimumSize(160, 40)
       win.setBounds({ x, y, width: w, height: 48 })
+      const updated = id ? getNoteById(id) : undefined
+      if (updated) win.webContents.send('note-data', updated)
     }
   })
 
@@ -303,11 +343,13 @@ function setupIPC() {
       const [w] = win.getSize()
       const id = winIdToNoteId.get(win.id)
       const saved = id ? getNoteById(id) : undefined
-      const h = saved?.height ?? 350
+      const h = saved?.expandedHeight ?? saved?.height ?? 350
       collapsedWinIds.delete(win.id)
-      if (id) upsertNote({ id, collapsed: false })
+      if (id) upsertNote({ id, collapsed: false, height: h, expandedHeight: h })
       win.setMinimumSize(168, 168)
       win.setBounds({ x, y, width: w, height: h })
+      const updated = id ? getNoteById(id) : undefined
+      if (updated) win.webContents.send('note-data', updated)
     }
   })
 
@@ -338,7 +380,7 @@ function setupIPC() {
           const [x, y] = win.getPosition()
           const [w, h] = win.getSize()
           const id = winIdToNoteId.get(win.id)
-          if (id) upsertNote({ id, x, y, width: w, height: h })
+          if (id) upsertNote({ id, x, y, width: w, height: h, expandedHeight: h })
         }
       }
     }
@@ -408,6 +450,12 @@ function buildTrayMenu() {
       },
     },
     { type: 'separator' },
+    {
+      label: 'Clear All Notes',
+      click: () => {
+        deleteAllNotes()
+      },
+    },
     {
       label: 'Quit',
       click: () => app.exit(0),
