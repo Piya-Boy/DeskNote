@@ -52,11 +52,24 @@ const Hero = () => {
           </div>
         </motion.div>
 
+        <motion.div
+          className="flex justify-center mb-6"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8, delay: 0.1, ease: "easeOut" }}
+        >
+          <img
+            src="/img/icon/logo.png"
+            alt="DeskNote Logo"
+            className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl"
+          />
+        </motion.div>
+
         <motion.h1
           className="text-6xl md:text-8xl font-bold font-display tracking-tight mb-6"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.1 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
         >
           Desk
           <span className="text-primary">Note</span>
@@ -66,7 +79,7 @@ const Hero = () => {
           className="text-xl md:text-2xl text-muted-foreground mb-4 font-body"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
         >
           Simple sticky notes for your desktop.
         </motion.p>
@@ -75,7 +88,7 @@ const Hero = () => {
           className="text-base md:text-lg text-muted-foreground/70 max-w-xl mx-auto mb-12 font-body"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
         >
           Create notes anywhere on your desktop.
           Drag, resize, pin and organize your thoughts instantly.
@@ -85,7 +98,7 @@ const Hero = () => {
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
+          transition={{ duration: 0.8, delay: 0.5 }}
         >
           <Button
             size="lg"
