@@ -9,7 +9,7 @@ Tech Stack:
 - Vite
 - Tailwind CSS
 - Electron
-- SQLite
+- JSON file persistence
 
 ---
 
@@ -74,7 +74,7 @@ Each note should behave like its own desktop widget.
 - [x] Delete with confirmation
 - [x] Bring to front on click
 - [x] Custom resize handle (bottom-right)
-- [x] Default size: 287 × 287 px (≈ 76 × 76 mm at 96 DPI)
+- [x] Default size: 320 × 350 px
 
 ### Result
 Each note becomes an independent floating window.
@@ -89,35 +89,25 @@ Allow users to place notes anywhere.
 ### Tasks
 - [x] Implement drag movement (via -webkit-app-region: drag)
 - [x] Implement resize handle (setPointerCapture + cursor polling in main)
-- [ ] Save position (x, y) — pending persistence
-- [ ] Save size (width, height) — pending persistence
+- [x] Save position (x, y)
+- [x] Save size (width, height)
 
 ### Result
 Notes can be freely moved and resized.
 
 ---
 
-# Phase 6 — Persistence
+# Phase 6 — Persistence ✅
 
 ### Goal
 Store notes permanently.
 
 ### Tasks
-Use SQLite database.
-
-Table structure:
-
-id
-text
-color
-x
-y
-width
-height
-pinned
-zIndex
-createdAt
-updatedAt
+- [x] JSON file persistence (notes.json in userData)
+- [x] Save/restore: id, text, color, pinned, collapsed, x, y, width, height
+- [x] Restore all notes on startup
+- [x] Save position on move, size on resize
+- [x] Collapse/expand state persisted correctly
 
 ### Result
 Notes remain after restarting the application or computer.

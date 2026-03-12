@@ -24,7 +24,7 @@ export function StickyNote({ note, onUpdate, onDelete, onBringToFront, zIndex }:
   const [showColors, setShowColors] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [size, setSize] = useState({ width: note.width || 220, height: note.height || 220 });
+  const [size, setSize] = useState({ width: note.width || 320, height: note.height || 350 });
   const [pos, setPos] = useState({ x: note.x || 0, y: note.y || 0 });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dragControls = useDragControls();
@@ -40,7 +40,7 @@ export function StickyNote({ note, onUpdate, onDelete, onBringToFront, zIndex }:
   }, [note.x, note.y, motionX, motionY]);
 
   useEffect(() => {
-    setSize({ width: note.width || 220, height: note.height || 220 });
+    setSize({ width: note.width || 320, height: note.height || 350  });
   }, [note.width, note.height]);
 
   const autoGrow = useCallback(() => {

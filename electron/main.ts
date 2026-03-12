@@ -2,6 +2,7 @@ import { app, Tray, Menu, nativeImage, globalShortcut, BrowserWindow, ipcMain, s
 import path from 'path'
 import fs from 'fs'
 
+
 let tray: Tray | null = null
 
 const DEV_URL = 'http://localhost:8080'
@@ -25,6 +26,7 @@ interface NoteRecord {
   text: string
   color: string
   pinned: boolean
+  collapsed: boolean
   x: number
   y: number
   width: number
@@ -66,10 +68,11 @@ function upsertNote(data: Partial<NoteRecord> & { id: string }) {
       text: data.text ?? '',
       color: data.color ?? 'yellow',
       pinned: data.pinned ?? false,
+      collapsed: data.collapsed ?? false,
       x: data.x ?? 100,
       y: data.y ?? 100,
-      width: data.width ?? 287,
-      height: data.height ?? 287,
+      width: data.width ?? 320,
+      height: data.height ?? 350,
       createdAt: now,
       updatedAt: now,
     })
@@ -84,6 +87,8 @@ function deleteNote(id: string) {
 
 // noteId lookup from windowId
 const winIdToNoteId = new Map<number, string>()
+// track which windows are currently collapsed (to prevent saving height=48)
+const collapsedWinIds = new Set<number>()
 
 // ------------------- App lifecycle -------------------
 
@@ -123,19 +128,23 @@ function createNoteWindow(savedNote?: NoteRecord) {
   } else {
     const { x: cursorX, y: cursorY } = screen.getCursorScreenPoint()
     const display = screen.getDisplayNearestPoint({ x: cursorX, y: cursorY })
-    winX = Math.min(cursorX, display.workArea.x + display.workArea.width - 287)
-    winY = Math.min(cursorY, display.workArea.y + display.workArea.height - 287)
+    winX = Math.min(cursorX, display.workArea.x + display.workArea.width - 320)
+    winY = Math.min(cursorY, display.workArea.y + display.workArea.height - 350)
   }
 
   const preloadPath = path.join(__dirname, 'preload.cjs')
 
+  const isCollapsed = savedNote?.collapsed ?? false
+  const winWidth = savedNote?.width ?? 320
+  const winHeight = isCollapsed ? 48 : (savedNote?.height ?? 350)
+
   const win = new BrowserWindow({
     x: winX,
     y: winY,
-    width: savedNote?.width ?? 287,
-    height: savedNote?.height ?? 287,
+    width: winWidth,
+    height: winHeight,
     minWidth: 168,
-    minHeight: 168,
+    minHeight: isCollapsed ? 40 : 168,
     frame: false,
     transparent: true,
     alwaysOnTop: false,
@@ -165,15 +174,18 @@ function createNoteWindow(savedNote?: NoteRecord) {
       text: '',
       color,
       pinned: false,
+      collapsed: false,
       x,
       y,
-      width: 287,
-      height: 287,
+      width: 320,
+      height: 350,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
     upsertNote(noteData)
   }
+
+  if (isCollapsed) collapsedWinIds.add(win.id)
 
   winIdToNoteId.set(win.id, noteId)
   noteIdToWinId.set(noteId, win.id)
@@ -188,6 +200,7 @@ function createNoteWindow(savedNote?: NoteRecord) {
     win.webContents.send('note-data', noteData)
   })
 
+
   // Save position on move
   win.on('moved', () => {
     const [x, y] = win.getPosition()
@@ -200,6 +213,7 @@ function createNoteWindow(savedNote?: NoteRecord) {
     const id = winIdToNoteId.get(win.id)
     if (id) noteIdToWinId.delete(id)
     winIdToNoteId.delete(win.id)
+    collapsedWinIds.delete(win.id)
     noteWindows.delete(win.id)
   })
 
@@ -238,14 +252,14 @@ function setupIPC() {
     win?.moveTop()
   })
 
-  const expandedHeights = new Map<number, number>()
-
   ipcMain.on('note-collapse', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (win) {
       const [x, y] = win.getPosition()
       const [w, h] = win.getSize()
-      expandedHeights.set(win.id, h)
+      const id = winIdToNoteId.get(win.id)
+      if (id) upsertNote({ id, height: h, collapsed: true })
+      collapsedWinIds.add(win.id)
       win.setMinimumSize(160, 40)
       win.setBounds({ x, y, width: w, height: 48 })
     }
@@ -256,8 +270,12 @@ function setupIPC() {
     if (win) {
       const [x, y] = win.getPosition()
       const [w] = win.getSize()
-      const h = expandedHeights.get(win.id) ?? 287
-      win.setMinimumSize(160, 160)
+      const id = winIdToNoteId.get(win.id)
+      const saved = id ? getNoteById(id) : undefined
+      const h = saved?.height ?? 350
+      collapsedWinIds.delete(win.id)
+      if (id) upsertNote({ id, collapsed: false })
+      win.setMinimumSize(168, 168)
       win.setBounds({ x, y, width: w, height: h })
     }
   })
@@ -284,11 +302,13 @@ function setupIPC() {
       if (BrowserWindow.fromWebContents(e.sender)?.id === win.id) {
         clearInterval(interval)
         ipcMain.removeListener('note-resize-stop', stopHandler)
-        // Save size after resize
-        const [x, y] = win.getPosition()
-        const [w, h] = win.getSize()
-        const id = winIdToNoteId.get(win.id)
-        if (id) upsertNote({ id, x, y, width: w, height: h })
+        // Save size after resize (but never save collapsed height)
+        if (!collapsedWinIds.has(win.id)) {
+          const [x, y] = win.getPosition()
+          const [w, h] = win.getSize()
+          const id = winIdToNoteId.get(win.id)
+          if (id) upsertNote({ id, x, y, width: w, height: h })
+        }
       }
     }
     ipcMain.on('note-resize-stop', stopHandler)

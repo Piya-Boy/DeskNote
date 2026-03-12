@@ -24,6 +24,7 @@ interface NoteData {
   text: string
   color: NoteColor
   pinned: boolean
+  collapsed: boolean
   width: number
   height: number
 }
@@ -47,6 +48,7 @@ export function NoteApp() {
   useEffect(() => {
     window.electronAPI?.onNoteData((data) => {
       setNote(data)
+      if (data.collapsed) setCollapsed(true)
     })
   }, [])
 
