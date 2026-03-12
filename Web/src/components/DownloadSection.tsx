@@ -39,17 +39,17 @@ const DownloadSection = () => {
           </Button>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground font-body">
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               <span>DeskNote.exe</span>
-            </div>
+            </div> */}
             <div className="flex items-center gap-2">
               <HardDrive className="h-4 w-4" />
-              <span>~99 MB</span>
+              <span>98.9 MB</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              <span>v1.0.0 · March 2026</span>
+              <span>· March 2026</span>
             </div>
           </div>
         </motion.div>
