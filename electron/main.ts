@@ -1,4 +1,4 @@
-import { app, Tray, Menu, nativeImage, globalShortcut, BrowserWindow, ipcMain, screen } from 'electron'
+import { app, Tray, Menu, nativeImage, globalShortcut, BrowserWindow, ipcMain, screen, clipboard } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
@@ -89,6 +89,8 @@ function deleteNote(id: string) {
 const winIdToNoteId = new Map<number, string>()
 // track which windows are currently collapsed (to prevent saving height=48)
 const collapsedWinIds = new Set<number>()
+// track whether notes are currently visible (for hide/show toggle)
+let notesVisible = true
 
 // ------------------- Auto-launch -------------------
 
@@ -115,6 +117,24 @@ function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+N', () => {
     createNoteWindow()
   })
+  globalShortcut.register('CommandOrControl+Shift+V', () => {
+    const text = clipboard.readText().trim()
+    createNoteWindow(undefined, text || undefined)
+  })
+  globalShortcut.register('CommandOrControl+Shift+H', () => {
+    toggleNotesVisibility()
+  })
+}
+
+function toggleNotesVisibility() {
+  if (notesVisible) {
+    noteWindows.forEach((win) => win.hide())
+  } else {
+    noteWindows.forEach((win) => win.show())
+  }
+  notesVisible = !notesVisible
+  // Rebuild tray menu to reflect current state
+  rebuildTrayMenu()
 }
 
 app.on('will-quit', () => {
@@ -130,7 +150,7 @@ app.on('window-all-closed', () => {
 const noteColors = ['yellow', 'blue', 'green', 'pink', 'purple'] as const
 let colorIndex = 0
 
-function createNoteWindow(savedNote?: NoteRecord) {
+function createNoteWindow(savedNote?: NoteRecord, initialText?: string) {
   let winX: number, winY: number
 
   if (savedNote) {
@@ -182,7 +202,7 @@ function createNoteWindow(savedNote?: NoteRecord) {
     const [x, y] = win.getPosition()
     noteData = {
       id: noteId,
-      text: '',
+      text: initialText ?? '',
       color,
       pinned: false,
       collapsed: false,
@@ -337,37 +357,60 @@ function createTray() {
   tray = new Tray(icon)
   tray.setToolTip('DeskNote')
 
-  function buildContextMenu() {
-    return Menu.buildFromTemplate([
-      {
-        label: 'New Note',
-        click: () => createNoteWindow(),
-      },
-      {
-        label: 'Show All Notes',
-        click: () => {
-          noteWindows.forEach((win) => win.show())
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Launch at Startup',
-        type: 'checkbox',
-        checked: getAutoLaunch(),
-        click: (menuItem) => {
-          setAutoLaunch(menuItem.checked)
-          // Rebuild menu so checkbox state is accurate
-          tray?.setContextMenu(buildContextMenu())
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => app.exit(0),
-      },
-    ])
-  }
-
-  tray.setContextMenu(buildContextMenu())
+  tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => tray?.popUpContextMenu())
+}
+
+function rebuildTrayMenu() {
+  tray?.setContextMenu(buildTrayMenu())
+}
+
+function buildTrayMenu() {
+  return Menu.buildFromTemplate([
+    {
+      label: 'New Note',
+      accelerator: 'CommandOrControl+Shift+N',
+      click: () => createNoteWindow(),
+    },
+    {
+      label: 'New Note from Clipboard',
+      accelerator: 'CommandOrControl+Shift+V',
+      click: () => {
+        const text = clipboard.readText().trim()
+        createNoteWindow(undefined, text || undefined)
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Show All Notes',
+      click: () => {
+        noteWindows.forEach((win) => win.show())
+        notesVisible = true
+        rebuildTrayMenu()
+      },
+    },
+    {
+      label: 'Hide All Notes',
+      click: () => {
+        noteWindows.forEach((win) => win.hide())
+        notesVisible = false
+        rebuildTrayMenu()
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Launch at Startup',
+      type: 'checkbox',
+      checked: getAutoLaunch(),
+      click: (menuItem) => {
+        setAutoLaunch(menuItem.checked)
+        rebuildTrayMenu()
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => app.exit(0),
+    },
+  ])
 }

@@ -84,11 +84,16 @@ export default {
           "0%": { transform: "scale(0.8)", opacity: "0" },
           "100%": { transform: "scale(1)", opacity: "1" },
         },
+        "fade-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pop-in": "pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "fade-in": "fade-in 0.2s ease-out",
       },
     },
   },

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Pin, Palette, Trash2, Minus } from 'lucide-react'
 import { ColorPicker } from './ColorPicker'
 import { NoteColor } from '@/types/note'
@@ -42,6 +43,7 @@ export function NoteApp() {
   const [showColors, setShowColors] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -90,6 +92,8 @@ export function NoteApp() {
       className="w-full h-full select-none relative"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       onMouseDown={() => window.electronAPI?.bringToFront()}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); if (!showColors && !confirmDelete) { /* allow hide */ } }}
     >
       <div
         className={`w-full h-full ${colorMap[note.color]} flex flex-col rounded-xl`}
@@ -98,16 +102,21 @@ export function NoteApp() {
         <div
           className="flex items-center justify-between px-3 pt-2.5 pb-1 cursor-grab active:cursor-grabbing shrink-0"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-          onMouseDown={() => window.electronAPI?.startDrag()}
         >
-          <div className="flex gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <button
+          <div
+            className={`flex gap-1 transition-opacity duration-200 ${isHovered || showColors ? 'opacity-100' : 'opacity-0'}`}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <motion.button
               onClick={() => update({ pinned: !note.pinned })}
               className={`p-1.5 rounded-lg transition-colors duration-150 ${note.pinned ? 'bg-foreground/10 text-foreground' : 'text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5'}`}
               title={note.pinned ? 'Unpin' : 'Pin'}
+              whileTap={{ scale: 0.85 }}
+              animate={note.pinned ? { scale: [1, 1.2, 1] } : {}}
+              transition={{ duration: 0.2 }}
             >
               <Pin size={14} className={note.pinned ? 'fill-current' : ''} />
-            </button>
+            </motion.button>
             <button
               onClick={() => setShowColors(!showColors)}
               className="p-1.5 rounded-lg text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5 transition-colors duration-150"
@@ -117,7 +126,10 @@ export function NoteApp() {
             </button>
           </div>
 
-          <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <div
+            className={`flex items-center gap-0.5 transition-opacity duration-200 ${isHovered || confirmDelete ? 'opacity-100' : 'opacity-0'}`}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
             <button
               onClick={() => {
                 if (collapsed) {
@@ -174,17 +186,28 @@ export function NoteApp() {
         )}
 
         {/* Textarea */}
-        {!collapsed && (
-          <div className="px-3 pb-3 flex-1 overflow-hidden">
-            <textarea
-              ref={textareaRef}
-              value={note.text}
-              onChange={(e) => update({ text: e.target.value })}
-              placeholder="Type something..."
-              className="w-full h-full bg-transparent resize-none outline-none text-sm leading-relaxed text-foreground placeholder:text-foreground/30 font-sans cursor-text overflow-auto scrollbar-none"
-            />
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              key="note-body"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className="overflow-hidden flex-1"
+            >
+              <div className="px-3 pb-3 h-full">
+                <textarea
+                  ref={textareaRef}
+                  value={note.text}
+                  onChange={(e) => update({ text: e.target.value })}
+                  placeholder="Type something..."
+                  className="w-full h-full bg-transparent resize-none outline-none text-sm leading-relaxed text-foreground placeholder:text-foreground/30 font-sans cursor-text overflow-auto scrollbar-none"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Resize handle */}

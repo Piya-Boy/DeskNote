@@ -128,13 +128,16 @@ Notes appear immediately after logging into Windows.
 
 ---
 
-# Phase 8 — Quality Improvements
+# Phase 8 — Quality Improvements ✅
 
 ### Tasks
-- Smooth drag animations
-- Clipboard quick note
-- Keyboard shortcuts
-- Improved UI polish
+- [x] Clipboard quick note (`Ctrl+Shift+V` + tray menu)
+- [x] Hide/Show all notes (`Ctrl+Shift+H` + tray menu)
+- [x] Keyboard shortcut labels shown in tray menu
+- [x] Smooth collapse/expand animation (framer-motion)
+- [x] Toolbar auto-hide on hover (fade in/out)
+- [x] Pin toggle micro-animation
+- [x] Improved UI polish
 
 ---
 
