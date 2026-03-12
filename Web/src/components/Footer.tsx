@@ -8,7 +8,8 @@ const Footer = () => {
           <span className="text-lg font-display font-bold">
             Desk<span className="text-primary">Note</span>
           </span>
-          <span className="text-muted-foreground font-body text-sm">© 2026</span>
+          <span className="text-muted-foreground font-body text-sm">© 2026</span> 
+          <span className="text-muted-foreground font-body text-sm">All rights reserved.</span>
         </div>
 
         <div className="flex items-center gap-6">
