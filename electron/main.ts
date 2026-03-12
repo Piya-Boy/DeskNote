@@ -90,6 +90,17 @@ const winIdToNoteId = new Map<number, string>()
 // track which windows are currently collapsed (to prevent saving height=48)
 const collapsedWinIds = new Set<number>()
 
+// ------------------- Auto-launch -------------------
+
+function getAutoLaunch(): boolean {
+  return app.getLoginItemSettings().openAtLogin
+}
+
+function setAutoLaunch(enable: boolean) {
+  if (!app.isPackaged) return // skip registry writes in dev
+  app.setLoginItemSettings({ openAtLogin: enable })
+}
+
 // ------------------- App lifecycle -------------------
 
 app.on('ready', () => {
@@ -110,8 +121,8 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
 })
 
-app.on('window-all-closed', (e: Event) => {
-  e.preventDefault()
+app.on('window-all-closed', () => {
+  // Intentionally empty — keeps app alive when all notes are closed
 })
 
 // ------------------- Note Window -------------------
@@ -326,24 +337,37 @@ function createTray() {
   tray = new Tray(icon)
   tray.setToolTip('DeskNote')
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'New Note',
-      click: () => createNoteWindow(),
-    },
-    {
-      label: 'Show All Notes',
-      click: () => {
-        noteWindows.forEach((win) => win.show())
+  function buildContextMenu() {
+    return Menu.buildFromTemplate([
+      {
+        label: 'New Note',
+        click: () => createNoteWindow(),
       },
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => app.exit(0),
-    },
-  ])
+      {
+        label: 'Show All Notes',
+        click: () => {
+          noteWindows.forEach((win) => win.show())
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Launch at Startup',
+        type: 'checkbox',
+        checked: getAutoLaunch(),
+        click: (menuItem) => {
+          setAutoLaunch(menuItem.checked)
+          // Rebuild menu so checkbox state is accurate
+          tray?.setContextMenu(buildContextMenu())
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => app.exit(0),
+      },
+    ])
+  }
 
-  tray.setContextMenu(contextMenu)
+  tray.setContextMenu(buildContextMenu())
   tray.on('click', () => tray?.popUpContextMenu())
 }

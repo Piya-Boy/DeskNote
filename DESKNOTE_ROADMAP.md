@@ -114,13 +114,14 @@ Notes remain after restarting the application or computer.
 
 ---
 
-# Phase 7 — Start With Windows
+# Phase 7 — Start With Windows ✅
 
 ### Goal
 DeskNote starts automatically with the operating system.
 
 ### Tasks
-- Enable auto start on Windows login
+- [x] Enable auto start on Windows login (via `app.setLoginItemSettings()`)
+- [x] Add "Launch at Startup" toggle in tray menu
 
 ### Result
 Notes appear immediately after logging into Windows.
