@@ -5,29 +5,27 @@ import { StickyNote } from "@/components/StickyNote";
 export default function NotePage() {
   const [note, setNote] = useState<Note | null>(null);
 
-  // Get noteId from URL query string
-  const noteId = new URLSearchParams(window.location.search).get("noteId");
-
   useEffect(() => {
-    if (!noteId || !window.electronAPI) return;
-    window.electronAPI.getNote(noteId).then((data: Note | null) => {
-      if (data) setNote(data);
+    if (!window.electronAPI) return;
+    // Receive note data pushed from main process
+    window.electronAPI.onNoteData((data: unknown) => {
+      setNote(data as Note);
     });
-  }, [noteId]);
+  }, []);
 
   const handleUpdate = useCallback(
-    (id: string, updates: Partial<Note>) => {
+    (_id: string, updates: Partial<Note>) => {
       if (!window.electronAPI) return;
       setNote((prev) => (prev ? { ...prev, ...updates } : prev));
-      window.electronAPI.updateNote(id, updates);
+      window.electronAPI.updateNote(updates);
     },
     []
   );
 
   const handleDelete = useCallback(
-    (id: string) => {
+    (_id: string) => {
       if (!window.electronAPI) return;
-      window.electronAPI.deleteNote(id);
+      window.electronAPI.deleteNote();
     },
     []
   );

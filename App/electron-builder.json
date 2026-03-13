@@ -6,8 +6,14 @@
   },
   "files": [
     "dist/**/*",
-    "dist-electron/**/*",
-    "note.html"
+    "dist-electron/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "public",
+      "to": "public",
+      "filter": ["**/*"]
+    }
   ],
   "win": {
     "target": [
@@ -16,7 +22,7 @@
         "arch": ["x64"]
       }
     ],
-    "icon": "public/img/icon/logo.png"
+    "icon": "public/icon256.png"
   },
   "mac": {
     "target": [
@@ -30,9 +36,6 @@
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
-    "installerIcon": "public/favicon.ico",
-    "uninstallerIcon": "public/favicon.ico",
-    "installerHeaderIcon": "public/favicon.ico",
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "DeskNote"

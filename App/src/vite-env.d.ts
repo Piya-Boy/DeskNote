@@ -2,9 +2,14 @@
 
 interface Window {
   electronAPI: {
-    getNote: (id: string) => Promise<import("./types/note").Note | null>;
-    updateNote: (id: string, updates: Partial<import("./types/note").Note>) => Promise<void>;
-    deleteNote: (id: string) => Promise<void>;
-    onNewNote: (callback: () => void) => void;
+    onNoteData: (cb: (data: unknown) => void) => void;
+    updateNote: (updates: Partial<import("./types/note").Note>) => Promise<void>;
+    deleteNote: () => Promise<void>;
+    startDrag: () => Promise<void>;
+    bringToFront: () => Promise<void>;
+    collapse: () => Promise<void>;
+    expand: () => Promise<void>;
+    resizeStart: (startW: number, startH: number) => Promise<void>;
+    resizeStop: () => Promise<void>;
   };
 }

@@ -45,7 +45,7 @@ const DownloadSection = () => {
             </div> */}
             <div className="flex items-center gap-2">
               <HardDrive className="h-4 w-4" />
-              <span>98.9 MB</span>
+              <span>98.5 MB</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />

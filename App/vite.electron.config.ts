@@ -15,7 +15,7 @@ export default defineConfig({
     outDir: 'dist-electron',
     emptyOutDir: false,
     rollupOptions: {
-      external: ['electron', 'path', 'fs', 'os', 'url', 'child_process'],
+      external: ['electron', 'path', 'node:path', 'fs', 'node:fs', 'os', 'node:os', 'url', 'node:url', 'child_process', 'node:child_process', 'crypto', 'node:crypto'],
     },
   },
 })

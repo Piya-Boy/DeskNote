@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import { Pin, Trash2, Palette } from "lucide-react";
+import { Pin, Trash2, Palette, Minus, ChevronDown } from "lucide-react";
 import { Note, NoteColor } from "@/types/note";
 import { ColorPicker } from "./ColorPicker";
 
@@ -35,6 +35,46 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
     autoGrow();
   }, [note.text, autoGrow]);
 
+  const handleCollapse = useCallback(() => {
+    if (window.electronAPI) {
+      window.electronAPI.collapse();
+      onUpdate(note.id, { collapsed: true });
+    }
+  }, [note.id, onUpdate]);
+
+  const handleExpand = useCallback(() => {
+    if (window.electronAPI) {
+      window.electronAPI.expand();
+      onUpdate(note.id, { collapsed: false });
+    }
+  }, [note.id, onUpdate]);
+
+  // Collapsed view
+  if (note.collapsed) {
+    return (
+      <div
+        className={`w-full h-full ${colorMap[note.color as NoteColor]} rounded-xl note-shadow relative flex items-center`}
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      >
+        <div
+          className="flex items-center justify-between w-full px-3"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
+          <span className="text-sm text-foreground/70 truncate flex-1 mr-2">
+            {note.text || "Empty note"}
+          </span>
+          <button
+            onClick={handleExpand}
+            className="p-1.5 rounded-lg text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5 transition-colors duration-150 shrink-0"
+            title="Expand"
+          >
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`w-full h-full ${colorMap[note.color as NoteColor]} rounded-xl transition-shadow duration-200 ${isHovered ? "note-shadow-hover" : "note-shadow"} relative overflow-hidden flex flex-col`}
@@ -63,6 +103,13 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
             title="Change color"
           >
             <Palette size={14} />
+          </button>
+          <button
+            onClick={handleCollapse}
+            className="p-1.5 rounded-lg text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5 transition-colors duration-150"
+            title="Collapse"
+          >
+            <Minus size={14} />
           </button>
         </div>
         <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
@@ -117,9 +164,32 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
         />
       </div>
 
-      {/* Resize handle decoration (purely visual) */}
-      <div className="absolute bottom-1 right-1 pointer-events-none opacity-20">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Resize handle (bottom-right corner) */}
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const startX = e.screenX;
+          const startY = e.screenY;
+          const startW = window.innerWidth;
+          const startH = window.innerHeight;
+
+          const onMouseMove = (ev: MouseEvent) => {
+            const newW = Math.max(160, startW + (ev.screenX - startX));
+            const newH = Math.max(160, startH + (ev.screenY - startY));
+            window.resizeTo(newW, newH);
+          };
+
+          const onMouseUp = () => {
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
+        }}
+      >
+        <svg className="absolute bottom-1 right-1 opacity-30" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="2" cy="8" r="1" fill="currentColor" />
           <circle cx="5" cy="8" r="1" fill="currentColor" />
           <circle cx="8" cy="8" r="1" fill="currentColor" />

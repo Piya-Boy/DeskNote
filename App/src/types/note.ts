@@ -9,4 +9,5 @@ export interface Note {
   width: number;
   height: number;
   pinned: boolean;
+  collapsed: boolean;
 }

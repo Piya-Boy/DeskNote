@@ -7,24 +7,22 @@ import {
   globalShortcut,
   ipcMain,
   screen,
+  clipboard,
 } from "electron";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ── Paths ──────────────────────────────────────────────────
+// In CJS output, __dirname is available directly
 const DIST_ELECTRON = __dirname;
 const DIST_RENDERER = path.join(DIST_ELECTRON, "../dist");
 const PUBLIC = app.isPackaged
-  ? DIST_RENDERER
+  ? path.join(process.resourcesPath, "public")
   : path.join(DIST_ELECTRON, "../public");
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
-// ── Note type (mirrored from renderer) ─────────────────────
+// ── Note type ──────────────────────────────────────────────
 interface Note {
   id: string;
   text: string;
@@ -34,9 +32,11 @@ interface Note {
   width: number;
   height: number;
   pinned: boolean;
+  collapsed: boolean;
 }
 
 const COLORS = ["yellow", "blue", "green", "pink", "purple"];
+const COLLAPSED_HEIGHT = 52;
 
 // ── Data storage ───────────────────────────────────────────
 const DATA_PATH = path.join(app.getPath("userData"), "notes.json");
@@ -46,7 +46,9 @@ let notes: Note[] = [];
 function loadNotes(): Note[] {
   try {
     if (fs.existsSync(DATA_PATH)) {
-      return JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
+      const loaded = JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
+      // Ensure collapsed field exists for old data
+      return loaded.map((n: Note) => ({ collapsed: false, ...n }));
     }
   } catch {
     // ignore
@@ -58,18 +60,28 @@ function saveNotes() {
   fs.writeFileSync(DATA_PATH, JSON.stringify(notes, null, 2));
 }
 
-function createNoteData(): Note {
-  const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
+function createNoteData(text = ""): Note {
+  const { width: screenW, height: screenH } =
+    screen.getPrimaryDisplay().workAreaSize;
   return {
     id: crypto.randomUUID(),
-    text: "",
+    text,
     color: COLORS[notes.length % COLORS.length],
     x: Math.round(screenW / 2 - 110 + Math.random() * 80 - 40),
     y: Math.round(screenH / 2 - 110 + Math.random() * 80 - 40),
     width: 260,
     height: 280,
     pinned: false,
+    collapsed: false,
   };
+}
+
+// ── Helper: find note id from BrowserWindow ─────────────────
+function getNoteIdFromWindow(win: BrowserWindow): string | undefined {
+  for (const [id, w] of noteWindows) {
+    if (w === win) return id;
+  }
+  return undefined;
 }
 
 // ── Note window ────────────────────────────────────────────
@@ -83,20 +95,20 @@ function createNoteWindow(note: Note) {
 
   const win = new BrowserWindow({
     width: note.width,
-    height: note.height,
+    height: note.collapsed ? COLLAPSED_HEIGHT : note.height,
     x: note.x,
     y: note.y,
     frame: false,
     transparent: true,
     alwaysOnTop: note.pinned,
-    resizable: true,
+    resizable: !note.collapsed,
     skipTaskbar: true,
     hasShadow: false,
-    icon: path.join(PUBLIC, "img/icon/logo.png"),
+    icon: path.join(PUBLIC, "favicon.ico"),
     minWidth: 160,
-    minHeight: 160,
+    minHeight: note.collapsed ? COLLAPSED_HEIGHT : 160,
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs"),
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
@@ -108,6 +120,19 @@ function createNoteWindow(note: Note) {
       search: `noteId=${note.id}`,
     });
   }
+
+  // Send note data to renderer once loaded
+  win.webContents.on("did-finish-load", () => {
+    win.webContents.send("note-data", {
+      id: note.id,
+      text: note.text,
+      color: note.color,
+      pinned: note.pinned,
+      collapsed: note.collapsed,
+      width: note.width,
+      height: note.height,
+    });
+  });
 
   // Save position on move
   win.on("moved", () => {
@@ -124,7 +149,7 @@ function createNoteWindow(note: Note) {
   win.on("resized", () => {
     const [width, height] = win.getSize();
     const n = notes.find((n) => n.id === note.id);
-    if (n) {
+    if (n && !n.collapsed) {
       n.width = width;
       n.height = height;
       saveNotes();
@@ -142,7 +167,9 @@ function createNoteWindow(note: Note) {
 let tray: Tray | null = null;
 
 function createTray() {
-  const iconPath = path.join(PUBLIC, "img/icon/logo.png");
+  const icoPath = path.join(PUBLIC, "favicon.ico");
+  const pngPath = path.join(PUBLIC, "img/icon/logo.png");
+  const iconPath = fs.existsSync(icoPath) ? icoPath : pngPath;
   const icon = nativeImage
     .createFromPath(iconPath)
     .resize({ width: 16, height: 16 });
@@ -153,6 +180,7 @@ function createTray() {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: "New Note",
+      accelerator: "Ctrl+Shift+N",
       click: () => {
         const note = createNoteData();
         notes.push(note);
@@ -161,11 +189,53 @@ function createTray() {
       },
     },
     {
+      label: "New Note from Clipboard",
+      accelerator: "Ctrl+Shift+V",
+      click: () => {
+        const text = clipboard.readText().trim();
+        const note = createNoteData(text);
+        notes.push(note);
+        saveNotes();
+        createNoteWindow(note);
+      },
+    },
+    { type: "separator" },
+    {
       label: "Show All Notes",
       click: () => {
         for (const note of notes) {
           createNoteWindow(note);
         }
+      },
+    },
+    {
+      label: "Hide All Notes",
+      click: () => {
+        for (const [, win] of noteWindows) {
+          win.hide();
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Launch at Startup",
+      type: "checkbox",
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (menuItem) => {
+        app.setLoginItemSettings({ openAtLogin: menuItem.checked });
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Clear All Notes",
+      click: () => {
+        // Close all windows
+        for (const [, win] of noteWindows) {
+          win.destroy();
+        }
+        noteWindows.clear();
+        notes = [];
+        saveNotes();
       },
     },
     { type: "separator" },
@@ -180,17 +250,24 @@ function createTray() {
 
   tray.setContextMenu(contextMenu);
 
-  tray.on("double-click", () => {
-    for (const note of notes) {
-      createNoteWindow(note);
-    }
+  // Show context menu on any click (left, right, double)
+  tray.on("click", () => {
+    tray?.popUpContextMenu(contextMenu);
   });
 }
 
-// ── Global Shortcut ────────────────────────────────────────
+// ── Global Shortcuts ──────────────────────────────────────
 function registerShortcuts() {
   globalShortcut.register("CommandOrControl+Shift+N", () => {
     const note = createNoteData();
+    notes.push(note);
+    saveNotes();
+    createNoteWindow(note);
+  });
+
+  globalShortcut.register("CommandOrControl+Shift+V", () => {
+    const text = clipboard.readText().trim();
+    const note = createNoteData(text);
     notes.push(note);
     saveNotes();
     createNoteWindow(note);
@@ -199,6 +276,97 @@ function registerShortcuts() {
 
 // ── IPC handlers ───────────────────────────────────────────
 function setupIPC() {
+  // ── Note CRUD (per-window, uses sender to identify note) ──
+
+  ipcMain.handle("update-note-self", (event, updates: Partial<Note>) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    const noteId = getNoteIdFromWindow(win);
+    if (!noteId) return;
+
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) return;
+
+    Object.assign(note, updates);
+    saveNotes();
+
+    // Sync alwaysOnTop with pinned state
+    if ("pinned" in updates) {
+      win.setAlwaysOnTop(!!updates.pinned);
+    }
+  });
+
+  ipcMain.handle("delete-note-self", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    const noteId = getNoteIdFromWindow(win);
+    if (!noteId) return;
+
+    notes = notes.filter((n) => n.id !== noteId);
+    saveNotes();
+    noteWindows.delete(noteId);
+    win.destroy();
+  });
+
+  // ── Window control ──
+
+  ipcMain.handle("bring-to-front", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      win.moveTop();
+    }
+  });
+
+  ipcMain.handle("start-drag", (event) => {
+    // Not needed — using CSS -webkit-app-region: drag instead
+  });
+
+  ipcMain.handle("collapse-note", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    const noteId = getNoteIdFromWindow(win);
+    if (!noteId) return;
+
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) return;
+
+    // Save current height before collapsing
+    const [w] = win.getSize();
+    note.collapsed = true;
+    saveNotes();
+
+    win.setResizable(false);
+    win.setMinimumSize(160, COLLAPSED_HEIGHT);
+    win.setSize(w, COLLAPSED_HEIGHT);
+  });
+
+  ipcMain.handle("expand-note", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    const noteId = getNoteIdFromWindow(win);
+    if (!noteId) return;
+
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) return;
+
+    note.collapsed = false;
+    saveNotes();
+
+    win.setMinimumSize(160, 160);
+    win.setSize(note.width, note.height);
+    win.setResizable(true);
+  });
+
+  ipcMain.handle("resize-start", (_event, _startW: number, _startH: number) => {
+    // Placeholder — resize is handled by OS via resizable:true
+  });
+
+  ipcMain.handle("resize-stop", () => {
+    // Placeholder
+  });
+
+  // ── Legacy handlers (keep for compatibility) ──
+
   ipcMain.handle("get-note", (_event, id: string) => {
     return notes.find((n) => n.id === id) || null;
   });
@@ -208,11 +376,9 @@ function setupIPC() {
     (_event, id: string, updates: Partial<Note>) => {
       const note = notes.find((n) => n.id === id);
       if (!note) return;
-
       Object.assign(note, updates);
       saveNotes();
 
-      // Sync alwaysOnTop with pinned state
       if ("pinned" in updates) {
         const win = noteWindows.get(id);
         if (win) win.setAlwaysOnTop(!!updates.pinned);
