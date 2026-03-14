@@ -13,12 +13,9 @@ import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
 
-// Auto-update: download then restart immediately (no wait for app quit)
+// Auto-update: download automatically, install when user quits the app
 autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = false;
-autoUpdater.on("update-downloaded", () => {
-  autoUpdater.quitAndInstall(true, true);
-});
+autoUpdater.autoInstallOnAppQuit = true;
 
 // ── Paths ──────────────────────────────────────────────────
 // In CJS output, __dirname is available directly
