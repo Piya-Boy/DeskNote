@@ -9,8 +9,16 @@ import {
   screen,
   clipboard,
 } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
+
+// Auto-update: download then restart immediately (no wait for app quit)
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = false;
+autoUpdater.on("update-downloaded", () => {
+  autoUpdater.quitAndInstall(true, true);
+});
 
 // ── Paths ──────────────────────────────────────────────────
 // In CJS output, __dirname is available directly
@@ -428,6 +436,9 @@ if (!gotTheLock) {
     for (const note of notes) {
       createNoteWindow(note);
     }
+
+    // Check for updates (download + quitAndInstall on update-downloaded)
+    autoUpdater.checkForUpdates().catch(() => {});
   });
 
   app.on("window-all-closed", () => {

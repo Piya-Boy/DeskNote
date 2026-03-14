@@ -1,6 +1,13 @@
 {
   "appId": "com.desknote.app",
   "productName": "DeskNote",
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "Piya-Boy",
+      "repo": "DeskNote"
+    }
+  ],
   "directories": {
     "output": "release"
   },
