@@ -77,11 +77,12 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
 
   return (
     <div
-      className={`w-full h-full ${colorMap[note.color as NoteColor]} rounded-xl transition-shadow duration-200 ${isHovered ? "note-shadow-hover" : "note-shadow"} relative overflow-hidden flex flex-col`}
+      className={`group w-full h-full ${colorMap[note.color as NoteColor]} rounded-xl transition-shadow duration-200 hover:shadow-lg note-shadow relative overflow-hidden flex flex-col`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
         setIsHovered(false);
         setShowColors(false);
+        setConfirmDelete(false);
       }}
     >
       {/* Drag handle — header bar with native window drag */}
@@ -89,7 +90,7 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
         className="flex items-center justify-between px-3 pt-2.5 pb-1"
         style={{ WebkitAppRegion: note.pinned ? "no-drag" : "drag" } as React.CSSProperties}
       >
-        <div className="flex gap-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ WebkitAppRegion: "no-drag", ...(showColors ? { opacity: 1 } : {}) } as React.CSSProperties}>
           <button
             onClick={() => onUpdate(note.id, { pinned: !note.pinned })}
             className={`p-1.5 rounded-lg transition-colors duration-150 ${note.pinned ? "bg-foreground/10 text-foreground" : "text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5"}`}
@@ -112,7 +113,7 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
             <Minus size={14} />
           </button>
         </div>
-        <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ WebkitAppRegion: "no-drag", ...(confirmDelete ? { opacity: 1 } : {}) } as React.CSSProperties}>
           {confirmDelete ? (
             <div className="flex items-center gap-1 animate-pop-in">
               <button
