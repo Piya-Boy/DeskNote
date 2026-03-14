@@ -54,7 +54,7 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
     return (
       <div
         className={`w-full h-full ${colorMap[note.color as NoteColor]} rounded-xl note-shadow relative flex items-center`}
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        style={{ WebkitAppRegion: note.pinned ? "no-drag" : "drag" } as React.CSSProperties}
       >
         <div
           className="flex items-center justify-between w-full px-3"
@@ -87,7 +87,7 @@ export function StickyNote({ note, onUpdate, onDelete }: StickyNoteProps) {
       {/* Drag handle — header bar with native window drag */}
       <div
         className="flex items-center justify-between px-3 pt-2.5 pb-1"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        style={{ WebkitAppRegion: note.pinned ? "no-drag" : "drag" } as React.CSSProperties}
       >
         <div className="flex gap-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
           <button

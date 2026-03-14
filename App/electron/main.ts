@@ -48,7 +48,7 @@ function loadNotes(): Note[] {
     if (fs.existsSync(DATA_PATH)) {
       const loaded = JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
       // Ensure collapsed field exists for old data
-      return loaded.map((n: Note) => ({ collapsed: false, ...n }));
+      return loaded.map((n: Note) => ({ ...n, collapsed: n.collapsed ?? false }));
     }
   } catch {
     // ignore
@@ -101,6 +101,7 @@ function createNoteWindow(note: Note) {
     frame: false,
     transparent: true,
     alwaysOnTop: note.pinned,
+    movable: !note.pinned,
     resizable: !note.collapsed,
     skipTaskbar: true,
     hasShadow: false,
@@ -211,7 +212,9 @@ function createTray() {
     {
       label: "Hide All Notes",
       click: () => {
-        for (const [, win] of noteWindows) {
+        for (const [id, win] of noteWindows) {
+          const note = notes.find((n) => n.id === id);
+          if (note?.pinned) continue; // Skip pinned notes
           win.hide();
         }
       },
@@ -290,9 +293,10 @@ function setupIPC() {
     Object.assign(note, updates);
     saveNotes();
 
-    // Sync alwaysOnTop with pinned state
+    // Sync alwaysOnTop and movable with pinned state
     if ("pinned" in updates) {
       win.setAlwaysOnTop(!!updates.pinned);
+      win.setMovable(!updates.pinned);
     }
   });
 
@@ -381,7 +385,10 @@ function setupIPC() {
 
       if ("pinned" in updates) {
         const win = noteWindows.get(id);
-        if (win) win.setAlwaysOnTop(!!updates.pinned);
+        if (win) {
+          win.setAlwaysOnTop(!!updates.pinned);
+          win.setMovable(!updates.pinned);
+        }
       }
     }
   );
@@ -397,26 +404,40 @@ function setupIPC() {
   });
 }
 
-// ── App lifecycle ──────────────────────────────────────────
-app.whenReady().then(() => {
-  notes = loadNotes();
-  setupIPC();
-  createTray();
-  registerShortcuts();
+// ── Single instance lock ───────────────────────────────────
+const gotTheLock = app.requestSingleInstanceLock();
 
-  // Open all saved notes on start
-  for (const note of notes) {
-    createNoteWindow(note);
-  }
-});
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    // Show all note windows when a second instance is attempted
+    for (const note of notes) {
+      createNoteWindow(note);
+    }
+  });
 
-app.on("window-all-closed", () => {
-  // Keep running in tray
-});
+  // ── App lifecycle ──────────────────────────────────────────
+  app.whenReady().then(() => {
+    notes = loadNotes();
+    setupIPC();
+    createTray();
+    registerShortcuts();
 
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
-});
+    // Open all saved notes on start
+    for (const note of notes) {
+      createNoteWindow(note);
+    }
+  });
+
+  app.on("window-all-closed", () => {
+    // Keep running in tray
+  });
+
+  app.on("will-quit", () => {
+    globalShortcut.unregisterAll();
+  });
+}
 
 // Extension to allow isQuitting
 declare global {

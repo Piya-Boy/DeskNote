@@ -2,33 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Pin, Palette, Trash2, Minus } from 'lucide-react'
 import { ColorPicker } from './ColorPicker'
-import { NoteColor } from '@/types/note'
+import { Note, NoteColor } from '@/types/note'
 
-declare global {
-  interface Window {
-    electronAPI: {
-      onNoteData: (cb: (data: NoteData) => void) => void
-      updateNote: (updates: Partial<NoteData>) => void
-      deleteNote: () => void
-      startDrag: () => void
-      bringToFront: () => void
-      collapse: () => void
-      expand: () => void
-      resizeStart: (startW: number, startH: number) => void
-      resizeStop: () => void
-    }
-  }
-}
-
-interface NoteData {
-  id: string
-  text: string
-  color: NoteColor
-  pinned: boolean
-  collapsed: boolean
-  width: number
-  height: number
-}
+type NoteData = Note
 
 const colorMap: Record<NoteColor, string> = {
   yellow: 'bg-note-yellow',
@@ -49,8 +25,9 @@ export function NoteApp() {
 
   useEffect(() => {
     window.electronAPI?.onNoteData((data) => {
-      setNote(data)
-      setCollapsed(!!data.collapsed)
+      const noteData = data as NoteData
+      setNote(noteData)
+      setCollapsed(!!noteData.collapsed)
     })
   }, [])
 
@@ -101,7 +78,7 @@ export function NoteApp() {
         {/* Header / drag handle */}
         <div
           className="flex items-center justify-between px-3 pt-2.5 pb-1 cursor-grab active:cursor-grabbing shrink-0"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          style={{ WebkitAppRegion: note.pinned ? 'no-drag' : 'drag' } as React.CSSProperties}
         >
           <div
             className={`flex gap-1 transition-opacity duration-200 ${isHovered || showColors ? 'opacity-100' : 'opacity-0'}`}
