@@ -41,8 +41,9 @@
     "icon": "public/img/icon/logo.png"
   },
   "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true,
+    "oneClick": true,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": false,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "DeskNote"

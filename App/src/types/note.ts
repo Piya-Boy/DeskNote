@@ -1,4 +1,4 @@
-export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple";
+export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "orange";
 
 export interface Note {
   id: string;

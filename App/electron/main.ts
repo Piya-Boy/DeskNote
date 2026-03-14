@@ -13,9 +13,14 @@ import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
 
-// Auto-update: download automatically, install when user quits the app
+// Auto-update: download automatically, show "Update Now" in tray menu
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
+let updateReady = false;
+autoUpdater.on("update-downloaded", () => {
+  updateReady = true;
+  rebuildTrayMenu();
+});
 
 // ── Paths ──────────────────────────────────────────────────
 // In CJS output, __dirname is available directly
@@ -40,7 +45,7 @@ interface Note {
   collapsed: boolean;
 }
 
-const COLORS = ["yellow", "blue", "green", "pink", "purple"];
+const COLORS = ["yellow", "blue", "green", "pink", "purple", "orange"];
 const COLLAPSED_HEIGHT = 52;
 
 // ── Data storage ───────────────────────────────────────────
@@ -172,18 +177,21 @@ function createNoteWindow(note: Note) {
 // ── Tray ───────────────────────────────────────────────────
 let tray: Tray | null = null;
 
-function createTray() {
-  const icoPath = path.join(PUBLIC, "favicon.ico");
-  const pngPath = path.join(PUBLIC, "img/icon/logo.png");
-  const iconPath = fs.existsSync(icoPath) ? icoPath : pngPath;
-  const icon = nativeImage
-    .createFromPath(iconPath)
-    .resize({ width: 16, height: 16 });
+function buildTrayMenuTemplate(): Electron.MenuItemConstructorOptions[] {
+  const items: Electron.MenuItemConstructorOptions[] = [];
 
-  tray = new Tray(icon);
-  tray.setToolTip("DeskNote");
+  // Show update button if update is ready
+  if (updateReady) {
+    items.push({
+      label: "🔄 Update Now",
+      click: () => {
+        autoUpdater.quitAndInstall(true, true);
+      },
+    });
+    items.push({ type: "separator" });
+  }
 
-  const contextMenu = Menu.buildFromTemplate([
+  items.push(
     {
       label: "New Note",
       accelerator: "Ctrl+Shift+N",
@@ -219,7 +227,7 @@ function createTray() {
       click: () => {
         for (const [id, win] of noteWindows) {
           const note = notes.find((n) => n.id === id);
-          if (note?.pinned) continue; // Skip pinned notes
+          if (note?.pinned) continue;
           win.hide();
         }
       },
@@ -237,7 +245,6 @@ function createTray() {
     {
       label: "Clear All Notes",
       click: () => {
-        // Close all windows
         for (const [, win] of noteWindows) {
           win.destroy();
         }
@@ -253,13 +260,37 @@ function createTray() {
         app.isQuitting = true;
         app.quit();
       },
-    },
-  ]);
+    }
+  );
 
+  return items;
+}
+
+function rebuildTrayMenu() {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate(buildTrayMenuTemplate());
   tray.setContextMenu(contextMenu);
+  if (updateReady) {
+    tray.setToolTip("DeskNote — Update available!");
+  }
+}
+
+function createTray() {
+  const icoPath = path.join(PUBLIC, "favicon.ico");
+  const pngPath = path.join(PUBLIC, "img/icon/logo.png");
+  const iconPath = fs.existsSync(icoPath) ? icoPath : pngPath;
+  const icon = nativeImage
+    .createFromPath(iconPath)
+    .resize({ width: 16, height: 16 });
+
+  tray = new Tray(icon);
+  tray.setToolTip("DeskNote");
+
+  rebuildTrayMenu();
 
   // Show context menu on any click (left, right, double)
   tray.on("click", () => {
+    const contextMenu = Menu.buildFromTemplate(buildTrayMenuTemplate());
     tray?.popUpContextMenu(contextMenu);
   });
 }
@@ -434,8 +465,11 @@ if (!gotTheLock) {
       createNoteWindow(note);
     }
 
-    // Check for updates (download + quitAndInstall on update-downloaded)
+    // Check for updates on startup and every 30 minutes
     autoUpdater.checkForUpdates().catch(() => {});
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch(() => {});
+    }, 5 * 60 * 1000);
   });
 
   app.on("window-all-closed", () => {

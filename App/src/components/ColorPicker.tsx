@@ -6,6 +6,7 @@ const colors: { key: NoteColor; className: string }[] = [
   { key: "green", className: "bg-note-green" },
   { key: "pink", className: "bg-note-pink" },
   { key: "purple", className: "bg-note-purple" },
+  { key: "orange", className: "bg-note-orange" },
 ];
 
 interface ColorPickerProps {

@@ -16,6 +16,7 @@ export default {
           green: "hsl(var(--note-green))",
           pink: "hsl(var(--note-pink))",
           purple: "hsl(var(--note-purple))",
+          orange: "hsl(var(--note-orange))",
         },
       },
       keyframes: {

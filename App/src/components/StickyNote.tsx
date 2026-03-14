@@ -9,6 +9,7 @@ const colorMap: Record<NoteColor, string> = {
   green: "bg-note-green",
   pink: "bg-note-pink",
   purple: "bg-note-purple",
+  orange: "bg-note-orange",
 };
 
 interface StickyNoteProps {
